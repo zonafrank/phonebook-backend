@@ -1,7 +1,13 @@
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
+}
+
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
+const mongoose = require("mongoose");
 let { persons } = require("./db.json");
+const Person = require("./models/person");
 
 const app = express();
 
@@ -45,7 +51,9 @@ app.get("/info", (req, res) => {
 });
 
 app.get("/api/persons", (req, res) => {
-  res.json(persons);
+  Person.find({}).then((persons) => {
+    res.json(persons);
+  });
 });
 
 app.post("/api/persons", (req, res) => {
@@ -65,32 +73,72 @@ app.post("/api/persons", (req, res) => {
     return res.status(400).json({ error: "name must be unique" });
   }
 
-  const personObject = {
-    name,
-    number,
-    id: getNextId(),
-  };
-
-  persons = persons.concat(personObject);
-
-  res.json(personObject);
+  const person = new Person({ name, number });
+  person.save().then((savedPerson) => {
+    return res.json(savedPerson);
+  });
 });
 
-app.get("/api/persons/:id", (req, res) => {
-  const person = persons.find((person) => person.id === Number(req.params.id));
-  if (person) {
-    res.json(person);
-  } else {
-    res.status(400).end();
+app.get("/api/persons/:id", (req, res, next) => {
+  Person.findById(req.params.id)
+    .then((foundPerson) => {
+      if (foundPerson) {
+        res.json(foundPerson);
+      } else {
+        res.status(400).end();
+      }
+    })
+    .catch((error) => {
+      next(error);
+    });
+});
+
+app.put("/api/persons/:id", (req, res, next) => {
+  const {
+    body: { name, number },
+  } = req;
+
+  Person.findByIdAndUpdate(req.params.id, { name, number }, { new: true })
+    .then((updatedPerson) => {
+      res.send(updatedPerson);
+    })
+    .catch((error) => {
+      next(error);
+    });
+});
+
+app.delete("/api/persons/:id", (req, res, next) => {
+  Person.findByIdAndRemove(req.params.id)
+    .then(() => {
+      res.status(204).end();
+    })
+    .catch((error) => {
+      next(error);
+    });
+});
+
+const unknownEndpoint = (req, res) => {
+  res.status(404).send({ error: "unknown endpoint" });
+};
+
+app.use(unknownEndpoint);
+
+const errorHandler = (error, req, res, next) => {
+  console.log(error.message);
+
+  if (error.name === "CastError") {
+    return res.status(400).send({ error: "malformatted id" });
   }
-});
 
-app.delete("/api/persons/:id", (req, res) => {
-  persons = persons.filter((person) => person.id !== Number(req.params.id));
-  res.status(204).end();
-});
+  next(error);
+};
+
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server started and listening on port ${PORT}`);
+
+mongoose.connection.once("open", () => {
+  app.listen(PORT, () => {
+    console.log(`Server started and listening on port ${PORT}`);
+  });
 });
