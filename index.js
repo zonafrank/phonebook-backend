@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.static("build"));
 app.use(express.json());
 
-morgan.token("body", function (req, res) {
+morgan.token("body", function (req) {
   return JSON.stringify(req.body);
 });
 
@@ -33,15 +33,6 @@ app.use(
     ].join(" ");
   })
 );
-
-const getNextId = () => {
-  let nextId;
-  do {
-    nextId = Math.floor(Math.random() * 1000000);
-  } while (persons.find((person) => person.id === nextId));
-
-  return nextId;
-};
 
 app.get("/info", (req, res) => {
   const message = `<p>Phonebook has info for ${
